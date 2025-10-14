@@ -1,0 +1,173 @@
+//This code shows the example to control the input/output at specific time 
+// Here the line (//myRTC.setDS1302Time(10, 20, 13, 7, 11, 10, 2025);) the content is commented after setting the time on the RTC
+//https://ijarsct.co.in/Paper2507.pdf
+
+
+//=======================================================================================================//|
+//                                                                                                       //|
+//                                        Program Description Begin                                      //|
+//                                                                                                       //|
+//=======================================================================================================//|
+//                                                                                                       //|
+//  This example executes a print out example that accesses individual data elements.                    //|
+//                                                                                                       //|
+//=======================================================================================================//|
+//                                                                                                       //|
+//                                        Program Description End                                        //|
+//                                                                                                       //|
+//=======================================================================================================//|
+
+
+//=======================================================================================================//|
+//                                                                                                       //|
+//                                 This is the Revision Section Begin                                    //|
+//                                                                                                       //|
+//=======================================================================================================//|
+//                                                                                                       //|
+//    Date                  Programmer                  Revisions Made                                   //|
+//                                                                                                       //|
+//    XX June 2012          Krodal                      Original                                         //|
+//    XX March 2013         Krodal                      Added bcd2bin, bin2bcd_h, and bin2bcd_l functions//|
+//    07 January 2014       Joseph Datillo              Converted file into library format.              //|
+//                          T. Daniel Murphy            Added functions to allow for user implentation   //|
+//                                                        as a library, vice a stand alone program.      //|
+//                                                        This also adds the functions required to access//|
+//                                                        individual data elements, and updating time.   //|
+//                                                                                                       //|
+//=======================================================================================================//|
+//                                                                                                       //|
+//                                        Revision Section End                                           //|
+//                                                                                                       //|
+//=======================================================================================================//|
+
+
+//=======================================================================================================//|
+//                                                                                                       //|
+//                                        Acknowledgements Begin                                         //|
+//                                                                                                       //|
+//=======================================================================================================//|
+//                                                                                                       //|
+//  The original program was provided by Arduino.cc user Kodal on URL:                                   //|
+//  http://playground.arduino.cc/Main/DS1302                                                             //|
+//                                                                                                       //|
+//=======================================================================================================//|
+//                                                                                                       //|
+//                                          Acknowledgements End                                         //|
+//                                                                                                       //|
+//=======================================================================================================//|
+
+
+//=======================================================================================================//|
+//                                                                                                       //|
+//                                            Reference Links Begin                                      //|
+//                                                                                                       //|
+//=======================================================================================================//|
+                                                                                                         //|
+//  Datasheet:  http://www.hobbytronics.co.uk/datasheets/DS1302.pdf                                      //|
+//  GET UPDATES: https://www.virtuabotix.com/resources.php?product=versalino                             //|
+                                                                                                         //|
+//=======================================================================================================//|
+//                                                                                                       //|
+//                                            Reference Links End                                        //|
+//                                                                                                       //|
+//=======================================================================================================//|
+
+
+//=======================================================================================================//|
+//                                                                                                       //|
+//                          Include files required for Program Function Begin                            //|
+//                                                                                                       //|
+//=======================================================================================================//|
+                                                                                                         //|
+#include <virtuabotixRTC.h>                                                                              //|
+                                                                                                         //|
+//=======================================================================================================//|
+//                                                                                                       //|
+//                          Include files required for Program Function End                              //|
+//                                                                                                       //|
+//=======================================================================================================//|
+
+// Creation of the Real Time Clock Object
+//virtuabotixRTC RTC(DS1302_CLK_PIN, DS1302_DAT_PIN, DS1302_RST_PIN); 
+virtuabotixRTC myRTC(6, 7, 8);
+int Relay = 13;
+const int OnHour = 17;
+const int OnMin = 20;
+const int OffHour = 17;
+const int OffMin = 22;
+const int ONTestSec = 30;
+const int OFFTestSec = 0;
+void setup()  {      
+  Serial.begin(9600);
+
+// Set the current date, and time in the following format:
+// seconds, minutes, hours, day of the week, day of the month, month, year
+  //myRTC.setDS1302Time(10, 20, 13, 7, 11, 10, 2025);
+
+  pinMode(Relay, OUTPUT);
+  digitalWrite(Relay, LOW);
+}
+
+//=======================================================================================================//|    
+//                                                                                                       //|   
+//                         Printout by accessing Single Element objects BEGIN                            //|   
+//                                                                                                       //|   
+//=======================================================================================================//|   
+//                                                                                                       //|   
+//  This example utilizes the Serial.print function to access individual data elements, this allows for  //|
+//  user defined output format.                                                                          //|
+//                                                                                                       //|   
+//+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++//|  
+void loop()  {                                                                                           //| 
+// This allows for the update of variables for time or accessing the individual elements.                //|
+  myRTC.updateTime();                                                                                    //| 
+                                                                                                         //| 
+// Start printing elements as individuals                                                                //|   
+  Serial.print("Current Date / Time: ");                                                                 //| 
+  Serial.print(myRTC.dayofmonth);                                                                        //| 
+  Serial.print("/");                                                                                     //| 
+  Serial.print(myRTC.month);                                                                             //| 
+  Serial.print("/");                                                                                     //| 
+  Serial.print(myRTC.year);                                                                              //| 
+  Serial.print("  ");                                                                                    //| 
+  Serial.print(myRTC.hours);                                                                             //| 
+  Serial.print(":");                                                                                     //| 
+  Serial.print(myRTC.minutes);                                                                           //| 
+  Serial.print(":");                                                                                     //| 
+  Serial.println(myRTC.seconds);                                                                         //| 
+                                                                                                         //| 
+// Delay so the program doesn't print non-stop                                                           //| 
+  delay( 5000);                                                                                          //| 
+
+//Starting the solenoid valve at specifc time of the day
+// if(myRTC.hour == OnHour && myRTC.min == OnMin){
+//  digitalWrite(Relay,HIGH); //On-1
+//  Serial.println("Watering the plant/ON");
+//  }
+//  else if(myRTC.hour == OffHour && myRTC.min == OffMin){
+//  digitalWrite(Relay,LOW); //Off-0
+//  Serial.println("Watering stopped/OFF");
+//  }
+
+//Changing the position of the LED every 30 second
+
+if(myRTC.seconds > ONTestSec){
+ digitalWrite(Relay,HIGH); //On-1
+ Serial.println("LED IS /ON");
+ }
+ else if(myRTC.seconds > OFFTestSec && myRTC.seconds < ONTestSec){
+ digitalWrite(Relay,LOW); //Off-0
+ Serial.println("LED IS /OFF");
+ }
+
+
+}                                                                                                        //| 
+                                                                                                         //|    
+//=======================================================================================================//|    
+//                                                                                                       //|    
+//                                   Printout using BUFFER objects BEGIN                                 //|    
+//                                                                                                       //|    
+//=======================================================================================================//|    
+
+
+  
