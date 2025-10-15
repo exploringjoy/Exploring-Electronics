@@ -1,0 +1,345 @@
+//15-Oct-2025
+//Solenoid Valve Control using Blynk
+//At Blink end the switch is defined at Virtual pin V4
+//Delay doesn't work very well with Blynk so use timer instead https://docs.blynk.io/en/getting-started/what-do-i-need-to-blynk/quickstart-device-code-overview
+//https://community.blynk.cc/t/using-blynktimer-or-simpletimer/53326
+
+// Here the line (//myRTC.setDS1302Time(10, 20, 13, 7, 11, 10, 2025);) the content is commented after setting the time on the RTC
+//https://ijarsct.co.in/Paper2507.pdf
+
+
+//=======================================================================================================//|
+//                                                                                                       //|
+//                                        Program Description Begin                                      //|
+//                                                                                                       //|
+//=======================================================================================================//|
+//                                                                                                       //|
+//  This example executes a print out example that accesses individual data elements.                    //|
+//                                                                                                       //|
+//=======================================================================================================//|
+//                                                                                                       //|
+//                                        Program Description End                                        //|
+//                                                                                                       //|
+//=======================================================================================================//|
+
+
+//=======================================================================================================//|
+//                                                                                                       //|
+//                                 This is the Revision Section Begin                                    //|
+//                                                                                                       //|
+//=======================================================================================================//|
+//                                                                                                       //|
+//    Date                  Programmer                  Revisions Made                                   //|
+//                                                                                                       //|
+//    XX June 2012          Krodal                      Original                                         //|
+//    XX March 2013         Krodal                      Added bcd2bin, bin2bcd_h, and bin2bcd_l functions//|
+//    07 January 2014       Joseph Datillo              Converted file into library format.              //|
+//                          T. Daniel Murphy            Added functions to allow for user implentation   //|
+//                                                        as a library, vice a stand alone program.      //|
+//                                                        This also adds the functions required to access//|
+//                                                        individual data elements, and updating time.   //|
+//                                                                                                       //|
+//=======================================================================================================//|
+//                                                                                                       //|
+//                                        Revision Section End                                           //|
+//                                                                                                       //|
+//=======================================================================================================//|
+
+
+//=======================================================================================================//|
+//                                                                                                       //|
+//                                        Acknowledgements Begin                                         //|
+//                                                                                                       //|
+//=======================================================================================================//|
+//                                                                                                       //|
+//  The original program was provided by Arduino.cc user Kodal on URL:                                   //|
+//  http://playground.arduino.cc/Main/DS1302                                                             //|
+//                                                                                                       //|
+//=======================================================================================================//|
+//                                                                                                       //|
+//                                          Acknowledgements End                                         //|
+//                                                                                                       //|
+//=======================================================================================================//|
+
+
+//=======================================================================================================//|
+//                                                                                                       //|
+//                                            Reference Links Begin                                      //|
+//                                                                                                       //|
+//=======================================================================================================//|
+                                                                                                         //|
+//  Datasheet:  http://www.hobbytronics.co.uk/datasheets/DS1302.pdf                                      //|
+//  GET UPDATES: https://www.virtuabotix.com/resources.php?product=versalino                             //|
+                                                                                                         //|
+//=======================================================================================================//|
+//                                                                                                       //|
+//                                            Reference Links End                                        //|
+//                                                                                                       //|
+//=======================================================================================================//|
+
+
+//=======================================================================================================//|
+//                                                                                                       //|
+//                          Include files required for Program Function Begin                            //|
+//                                                                                                       //|
+//=======================================================================================================//|
+                                                                                                         //|
+#include <virtuabotixRTC.h>                                                                              //|
+                                                                                                         //|
+//=======================================================================================================//|
+//                                                                                                       //|
+//                          Include files required for Program Function End                              //|
+//                                                                                                       //|
+//=======================================================================================================//|
+
+
+//=======================================================================================================//|
+//==============================================BLYNK==============================================//|
+//=======================================================================================================//|
+
+#define BLYNK_TEMPLATE_ID "TMPL3l--PQg8A"
+#define BLYNK_TEMPLATE_NAME "Solenoid Valve"
+#define BLYNK_AUTH_TOKEN "GH71l5FJqwvkjRYHVNyGEUCU3duoSpBF"
+
+
+#include <SPI.h>
+#include <WiFi.h>
+#include <BlynkSimpleWifi.h>
+
+
+// Your WiFi credentials.
+// Set password to "" for open networks.
+char ssid[] = "Zolo_iBus";
+char pass[] = "";
+int pinValue;
+int valveStatus = 0;
+bool timerIsRunning = false;
+bool manualControl = false;
+
+BlynkTimer timer;
+
+BLYNK_WRITE(V4)
+{
+pinValue = param.asInt();
+}
+
+// void sendSensor()
+// {
+//   // Blynk.virtualWrite(V1, random(0,100));
+//   // Blynk.virtualWrite(V2, random(100,200));
+//   Blynk.virtualWrite(V3, valveStatus);
+// }
+
+//=======================================================================================================//|
+//==============================================BLYNK==============================================//|
+//=======================================================================================================//|
+
+// Creation of the Real Time Clock Object
+//virtuabotixRTC RTC(DS1302_CLK_PIN, DS1302_DAT_PIN, DS1302_RST_PIN); 
+virtuabotixRTC myRTC(6, 7, 8);
+int Relay = 13;
+const int OnHour = 17;
+const int OnMin = 20;
+const int OffHour = 17;
+const int OffMin = 22;
+const int ONTestSec = 30;
+const int OFFTestSec = 0;
+
+void watering_off()
+{
+  if (timerIsRunning == true)
+  {
+  digitalWrite(Relay,LOW); //Off-0
+  Blynk.logEvent("watering_off", String("Watering is turned OFF"));
+Serial.println("Watering the plant/OFF");
+  Serial.print("Current Date / Time: ");                                                                 //| 
+  Serial.print(myRTC.dayofmonth);                                                                        //| 
+  Serial.print("/");                                                                                     //| 
+  Serial.print(myRTC.month);                                                                             //| 
+  Serial.print("/");                                                                                     //| 
+  Serial.print(myRTC.year);                                                                              //| 
+  Serial.print("  ");                                                                                    //| 
+  Serial.print(myRTC.hours);                                                                             //| 
+  Serial.print(":");                                                                                     //| 
+  Serial.print(myRTC.minutes);                                                                           //| 
+  Serial.print(":");                                                                                     //| 
+  Serial.println(myRTC.seconds);                                                                         //| 
+
+  }
+
+timerIsRunning = false;
+}
+
+void setup()  {      
+  Serial.begin(9600);
+
+// Set the current date, and time in the following format:
+// seconds, minutes, hours, day of the week, day of the month, month, year
+  //myRTC.setDS1302Time(10, 20, 13, 7, 11, 10, 2025);
+  pinMode(Relay, OUTPUT);
+  digitalWrite(Relay, LOW);
+
+
+
+  Blynk.begin(BLYNK_AUTH_TOKEN, ssid, pass);
+  // You can also specify server:
+  //Blynk.begin(BLYNK_AUTH_TOKEN, ssid, pass, "blynk.cloud", 80);
+  //Blynk.begin(BLYNK_AUTH_TOKEN, ssid, pass, IPAddress(192,168,1,100), 8080);
+  //timer.setInterval(1000L, sendSensor);
+}
+
+//=======================================================================================================//|    
+//                                                                                                       //|   
+//                         Printout by accessing Single Element objects BEGIN                            //|   
+//                                                                                                       //|   
+//=======================================================================================================//|   
+//                                                                                                       //|   
+//  This example utilizes the Serial.print function to access individual data elements, this allows for  //|
+//  user defined output format.                                                                          //|
+//                                                                                                       //|   
+//+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++//|  
+void loop()  {                                                                                           //| 
+
+//++++++++++++++++++++++++++++++++++++++++BLYNK+++++++++++++++++++++++++++++++++++++++++++++++++++//|  
+ Blynk.run();
+  timer.run();
+ // Serial.println(pinValue);
+ //delay(100);
+
+//++++++++++++++++++++++++++++++++++++++++BLYNK+++++++++++++++++++++++++++++++++++++++++++++++++++//|  
+
+
+
+
+// This allows for the update of variables for time or accessing the individual elements.                //|
+  myRTC.updateTime();                                                                                    //| 
+                                                                                                         //| 
+// Start printing elements as individuals                                                                //|   
+  // Serial.print("Current Date / Time: ");                                                                 //| 
+  // Serial.print(myRTC.dayofmonth);                                                                        //| 
+  // Serial.print("/");                                                                                     //| 
+  // Serial.print(myRTC.month);                                                                             //| 
+  // Serial.print("/");                                                                                     //| 
+  // Serial.print(myRTC.year);                                                                              //| 
+  // Serial.print("  ");                                                                                    //| 
+  // Serial.print(myRTC.hours);                                                                             //| 
+  // Serial.print(":");                                                                                     //| 
+  // Serial.print(myRTC.minutes);                                                                           //| 
+  // Serial.print(":");                                                                                     //| 
+  // Serial.println(myRTC.seconds);                                                                         //| 
+                                                                                                         //| 
+// Delay so the program doesn't print non-stop                                                           //| 
+  //delay( 1000);                                                                                          //| 
+
+//Starting the solenoid valve at specifc time of the day
+// if(myRTC.hour == OnHour && myRTC.min == OnMin){
+//  digitalWrite(Relay,HIGH); //On-1
+//  Serial.println("Watering the plant/ON");
+//  }
+//  else if(myRTC.hour == OffHour && myRTC.min == OffMin){
+//  digitalWrite(Relay,LOW); //Off-0
+//  Serial.println("Watering stopped/OFF");
+//  }
+
+
+//Test Use Case for Checking Notification
+//Starting the Solenoid Valve every 5 min for two hour
+if(myRTC.hours == 3 || timerIsRunning == true || myRTC.hours == 4 || myRTC.hours == 5 || myRTC.hours == 6 || myRTC.hours == 7 || myRTC.hours == 8 ){
+
+//if(myRTC.minutes == 5 || timerIsRunning == true || myRTC.minutes == 15 || myRTC.minutes == 18 ){
+ 
+
+
+ if (timerIsRunning == false)
+ {
+  digitalWrite(Relay,HIGH); //On-1
+   Serial.println("Watering the plant/ON");
+ Blynk.logEvent("watering_on",String("Watering is turned ON"));
+  //A delay of 3 min.
+  Serial.print("Current Date / Time: ");                                                                 //| 
+  Serial.print(myRTC.dayofmonth);                                                                        //| 
+  Serial.print("/");                                                                                     //| 
+  Serial.print(myRTC.month);                                                                             //| 
+  Serial.print("/");                                                                                     //| 
+  Serial.print(myRTC.year);                                                                              //| 
+  Serial.print("  ");                                                                                    //| 
+  Serial.print(myRTC.hours);                                                                             //| 
+  Serial.print(":");                                                                                     //| 
+  Serial.print(myRTC.minutes);                                                                           //| 
+  Serial.print(":");                                                                                     //| 
+  Serial.println(myRTC.seconds);                                                                         //| 
+ }
+ timer.setTimeout(60000L, watering_off);
+ timerIsRunning = true;
+ //A delay of 3 min.
+  // Serial.print("Current Date / Time: ");                                                                 //| 
+  // Serial.print(myRTC.dayofmonth);                                                                        //| 
+  // Serial.print("/");                                                                                     //| 
+  // Serial.print(myRTC.month);                                                                             //| 
+  // Serial.print("/");                                                                                     //| 
+  // Serial.print(myRTC.year);                                                                              //| 
+  // Serial.print("  ");                                                                                    //| 
+  // Serial.print(myRTC.hours);                                                                             //| 
+  // Serial.print(":");                                                                                     //| 
+  // Serial.print(myRTC.minutes);                                                                           //| 
+  // Serial.print(":");                                                                                     //| 
+  // Serial.println(myRTC.seconds);                                                                         //| 
+
+
+ //delay(180000);
+//   digitalWrite(Relay,LOW); //Off-0
+// delay(6000);
+// Blynk.logEvent("watering_off", String("Watering is turned OFF"));
+// Serial.println("Watering the plant/OFF");
+ }
+//  else if(myRTC.minutes %5==2){
+//  digitalWrite(Relay,LOW); //Off-0
+//  Serial.println("Watering stopped/OFF");
+// delay(400);
+//  }
+
+//Changing the position of the LED every 30 second
+
+// if(myRTC.minutes % 2 == 0){
+//  digitalWrite(Relay,HIGH); //On-1
+//  Serial.println("LED IS /ON");
+//  valveStatus = 1;
+ 
+//  }
+//  else if(myRTC.minutes % 2 == 1){
+//  digitalWrite(Relay,LOW); //Off-0
+//  Serial.println("LED IS /OFF");
+//  valveStatus = 0;
+//  }
+
+
+//Controlling the Valve via Blynk
+//the manualControl flag is used to prevent multiple execution of Blynk Log Event.
+//the timerIsRunning flag is used to detect if the timer is running as it is a non blocking function.
+
+
+if(pinValue == 0 && timerIsRunning == false && manualControl == true)
+{
+  digitalWrite(Relay,LOW); //Off-0
+  Serial.println("LED IS /OFF");
+  Blynk.logEvent("water_manually_turned_off",String("Watering is manually turned OFF"));
+  manualControl = false;
+}
+else if(pinValue == 1 && timerIsRunning == false && manualControl == false)
+{
+   digitalWrite(Relay,HIGH); //On-1
+ Serial.println("LED IS /ON");
+  Blynk.logEvent("water_manually_turned_on",String("Watering is manually turned ON"));
+  manualControl = true;
+}
+
+}                                                                                                        //| 
+                                                                                                         //|    
+//=======================================================================================================//|    
+//                                                                                                       //|    
+//                                   Printout using BUFFER objects BEGIN                                 //|    
+//                                                                                                       //|    
+//=======================================================================================================//|    
+
+
+  
