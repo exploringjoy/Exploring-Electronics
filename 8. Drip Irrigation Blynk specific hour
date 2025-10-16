@@ -1,8 +1,8 @@
-//15-Oct-2025
+//16-Oct-2025
 //Solenoid Valve Control using Blynk
 //At Blink end the switch is defined at Virtual pin V4
 //Delay doesn't work very well with Blynk so use timer instead https://docs.blynk.io/en/getting-started/what-do-i-need-to-blynk/quickstart-device-code-overview
-//https://community.blynk.cc/t/using-blynktimer-or-simpletimer/53326
+
 
 // Here the line (//myRTC.setDS1302Time(10, 20, 13, 7, 11, 10, 2025);) the content is commented after setting the time on the RTC
 //https://ijarsct.co.in/Paper2507.pdf
@@ -244,8 +244,9 @@ void loop()  {                                                                  
 
 //Test Use Case for Checking Notification
 //Starting the Solenoid Valve every 5 min for two hour
-if(myRTC.hours == 3 || timerIsRunning == true || myRTC.hours == 4 || myRTC.hours == 5 || myRTC.hours == 6 || myRTC.hours == 7 || myRTC.hours == 8 ){
-
+//This below condition will not work as expected without grouping the OR and AND conditions in separate bracket as AND is operated first follow by OR because of oeprator precendence
+//if((myRTC.hours == 3 || timerIsRunning == true || myRTC.hours == 4 || myRTC.hours == 5 || myRTC.hours == 6 || myRTC.hours == 7 || myRTC.hours == 8 || myRTC.hours == 9) && (myRTC.minutes == 14)){
+if((timerIsRunning == true || myRTC.hours == 9 || myRTC.hours == 10) && (myRTC.minutes == 0) && (myRTC.dayofweek == 1 || myRTC.dayofweek == 3 || myRTC.dayofweek == 5)){
 //if(myRTC.minutes == 5 || timerIsRunning == true || myRTC.minutes == 15 || myRTC.minutes == 18 ){
  
 
@@ -268,6 +269,7 @@ if(myRTC.hours == 3 || timerIsRunning == true || myRTC.hours == 4 || myRTC.hours
   Serial.print(myRTC.minutes);                                                                           //| 
   Serial.print(":");                                                                                     //| 
   Serial.println(myRTC.seconds);                                                                         //| 
+  
  }
  timer.setTimeout(60000L, watering_off);
  timerIsRunning = true;
@@ -331,6 +333,22 @@ else if(pinValue == 1 && timerIsRunning == false && manualControl == false)
  Serial.println("LED IS /ON");
   Blynk.logEvent("water_manually_turned_on",String("Watering is manually turned ON"));
   manualControl = true;
+
+   Serial.print("Current Date / Time: ");                                                                 //| 
+  Serial.print(myRTC.dayofmonth);                                                                        //| 
+  Serial.print("/");                                                                                     //| 
+  Serial.print(myRTC.month);                                                                             //| 
+  Serial.print("/");                                                                                     //| 
+  Serial.print(myRTC.year);                                                                              //| 
+  Serial.print("  ");                                                                                    //| 
+  Serial.print(myRTC.hours);                                                                             //| 
+  Serial.print(":");                                                                                     //| 
+  Serial.print(myRTC.minutes);                                                                           //| 
+  Serial.print(":");                                                                                     //| 
+  Serial.println(myRTC.seconds);    
+  Serial.print("The Day of the week is: ");                                                                      //| 
+  Serial.println(myRTC.dayofweek);
+  
 }
 
 }                                                                                                        //| 
