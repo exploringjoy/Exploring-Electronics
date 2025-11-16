@@ -1,0 +1,310 @@
+//16-Nov-2025
+// New Enhancement Introduced
+//1. RTC synchronization with NTP once every 24 hours
+//2. Arduino reset in 1 Hour if it is not connected to Wi-Fi --> to keep the Wi-Fi connectivity more resilent. (As Arduino Uno R4 Wifi's network connectivity becomes little unstable after few days of continuous operations.)
+//3. Watering timining changes to 5 min in the morning (divided in two part 2.5 min each) and 2 min in the evening
+
+//16-Oct-2025
+//Solenoid Valve Control using Blynk
+//At Blink end the switch is defined at Virtual pin V4
+//Delay doesn't work very well with Blynk so use timer instead https://docs.blynk.io/en/getting-started/what-do-i-need-to-blynk/quickstart-device-code-overview
+//https://community.blynk.cc/t/using-blynktimer-or-simpletimer/53326
+//RTC used is DS1302
+//https://github.com/hibit-dev/ds1302/
+//https://projecthub.arduino.cc/hibit/keeping-time-with-ds1302-real-time-clock-on-arduino-07d30b
+//https://community.blynk.cc/t/i-want-esp8266-module-will-not-give-any-output-if-it-is-disconnected-from-wifi-network/63885/2
+//https://docs.blynk.io/en/blynk-library-firmware-api/rtc-clock --> To Sync your RTC
+//https://github.com/arduino-libraries/NTPClient --> NTP client library
+//https://github.com/PaulStoffregen/Time/blob/master/examples/TimeNTP_ESP8266WiFi/TimeNTP_ESP8266WiFi.ino
+//https://forum.arduino.cc/t/can-a-mega-reset-pin-be-controlled-with-code/1148424. --> Software Reset
+
+
+#include <virtuabotixRTC.h>
+#define BLYNK_TEMPLATE_ID "TMPL3l--PQg8A"
+#define BLYNK_TEMPLATE_NAME "Solenoid Valve"
+#define BLYNK_AUTH_TOKEN "GH71l5FJqwvkjRYHVNyGEUCU3duoSpBF"
+
+#include <SPI.h>
+#include <WiFi.h>
+#include <BlynkSimpleWifi.h>
+#include <TimeLib.h>
+#include <WiFiUdp.h>
+#include <WDT.h>
+
+// NTP Servers:
+//https://www.ntppool.org/zone/asia
+static const char ntpServerName[] = "in.pool.ntp.org";  //India NTP server
+//static const char ntpServerName[] = "time.nist.gov";
+//static const char ntpServerName[] = "time-a.timefreq.bldrdoc.gov";
+//static const char ntpServerName[] = "time-b.timefreq.bldrdoc.gov";
+//static const char ntpServerName[] = "time-c.timefreq.bldrdoc.gov";
+
+const float timeZone = 5.50;  // IST Time (+05:30)
+//const int timeZone = -5;  // Eastern Standard Time (USA)
+//const int timeZone = -4;  // Eastern Daylight Time (USA)
+//const int timeZone = -8;  // Pacific Standard Time (USA)
+//const int timeZone = -7;  // Pacific Daylight Time (USA)
+WiFiUDP Udp;
+unsigned int localPort = 8888;  // local port to listen for UDP packets
+
+const long wdtInterval = 5592;  //this is delay for watchdog reset
+
+time_t getNtpTime();
+void digitalClockDisplay();
+void printDigits(int digits);
+void sendNTPpacket(IPAddress &address);
+
+void watering_off();
+
+void ExternalRTCDisplay();
+
+char ssid[] = "Zolo_iBus";
+char pass[] = "";
+int pinValue;
+int valveStatus = 0;
+bool timerIsRunning = false;
+bool manualControl = false;
+int Relay = 13;
+bool ExternalRTCSync= false;
+
+BlynkTimer timer;
+
+BLYNK_WRITE(V4) {
+  pinValue = param.asInt();
+}
+
+virtuabotixRTC myRTC(6, 7, 8);
+
+
+void setup() {
+  Serial.begin(9600);
+
+  // Set the current date, and time in the following format:
+  // seconds, minutes, hours, day of the week, day of the month, month, year
+  //myRTC.setDS1302Time(10, 20, 13, 7, 11, 10, 2025);
+  pinMode(Relay, OUTPUT);
+  digitalWrite(Relay, LOW);
+  Blynk.begin(BLYNK_AUTH_TOKEN, ssid, pass);
+
+  //init and get the time
+  // configTime(GMTOffset_sec, DayLightOffset_sec, NTPServer);
+  // printLocalTime();
+
+  while (WiFi.status() != WL_CONNECTED) {
+    delay(500);
+    Serial.print(".");
+  }
+
+  Serial.print("IP number assigned by DHCP is ");
+  Serial.println(WiFi.localIP());
+  Serial.println("Starting UDP");
+  Udp.begin(localPort);
+  Serial.print("Local port: ");
+  //Serial.println(Udp.localPort());
+  Serial.println("waiting for sync");
+  setSyncProvider(getNtpTime);
+  setSyncInterval(300);
+
+  //Watchdog
+  //Safety to avoid invalid watchdog
+  if (wdtInterval < 1) {
+    Serial.println("Invalid watchdog interval");
+    while (1) {}
+  }
+
+  if (WDT.begin(wdtInterval)) {
+    Serial.print("WDT interval: ");
+    WDT.refresh();
+    Serial.print(WDT.getTimeout());
+    WDT.refresh();
+    Serial.println(" ms");
+    WDT.refresh();
+  } else {
+    Serial.println("Error initializing watchdog");
+    while (1) {}
+  }
+}
+
+time_t prevDisplay = 0;  // when the digital clock was displayed
+
+void loop() {
+  Blynk.run();
+  timer.run();
+  // This allows for the update of variables for time or accessing the individual elements.
+  myRTC.updateTime();
+  WDT.refresh();  //refresh the Watchdog timer
+
+  //Morning Watering for 5 min
+  if ((timerIsRunning == true || myRTC.hours == 9 || myRTC.hours == 10) && (myRTC.minutes == 0)) {
+    if (timerIsRunning == false) {
+      digitalWrite(Relay, HIGH);  //On-1
+      Blynk.logEvent("watering_on", String("Morning Watering is turned ON"));
+    }
+
+    //setting up delay for 2.5 min.
+    timer.setTimeout(150000L, watering_off);
+    timerIsRunning = true;
+  }
+
+
+  //Evening Watering for 2 min
+  if ((timerIsRunning == true || myRTC.hours == 17) && (myRTC.minutes == 0)) {
+    if (timerIsRunning == false) {
+      digitalWrite(Relay, HIGH);  //On-1
+      Serial.println("Watering the plant/ON");
+      Blynk.logEvent("watering_on", String("Evening Watering is turned ON"));  //|
+    }
+    timer.setTimeout(120000L, watering_off);
+    timerIsRunning = true;
+    ExternalRTCSync=false; //To reset the Sync flag once every 24 hours.
+  }
+
+
+  //Manual Watering
+  if (pinValue == 0 && timerIsRunning == false && manualControl == true) {
+    digitalWrite(Relay, LOW);  //Off-0
+    Serial.println("LED IS /OFF");
+    Blynk.logEvent("water_manually_turned_off", String("Watering is manually turned OFF, RTC Time " + String(myRTC.hours) + ":" + String(myRTC.minutes) + ":" + String(myRTC.seconds)));
+    manualControl = false;
+  } else if (pinValue == 1 && timerIsRunning == false && manualControl == false) {
+    digitalWrite(Relay, HIGH);  //On-1
+    Serial.println("LED IS /ON");
+    Blynk.logEvent("water_manually_turned_on", String("Watering is manually turned ON, RTC Time " + String(myRTC.hours) + ":" + String(myRTC.minutes) + ":" + String(myRTC.seconds)));
+    manualControl = true;
+  }
+
+  if (timeStatus() != timeNotSet) {
+    if (now() != prevDisplay) {  //update the display only if time has changed
+      prevDisplay = now();
+   //   digitalClockDisplay();
+
+      //Synchronizing the External RTC with time received from NTP once every 24 hours
+      if (Blynk.connected() == true && myRTC.hours == 8 && myRTC.minutes == 0 && ExternalRTCSync==false) {
+        myRTC.setDS1302Time(second(), minute(), hour(), weekday(), day(), month(), year());
+        Serial.println("Synchronizing the External RTC with NTP");
+        delay(500);
+        ExternalRTCSync=true; //Flag to Sync the Clock only once.
+      }
+    }
+  }
+
+  //  delay(500);
+  // ExternalRTCDisplay();
+  // //Delay so the program doesn't print non-stop                                                           //|
+  // delay(500);  //|
+
+
+
+  //Resetting the arduino every 1 Hour if it is not connected to Internet
+  //the reset is achieved by creating a delay longer than watchdog reset interval
+  if (Blynk.connected() == false) {
+    if ((myRTC.minutes == 30)) {
+      delay(6000);
+    }
+  }
+}
+
+
+void digitalClockDisplay() {
+  // digital clock display of the time
+  Serial.print(hour());
+  printDigits(minute());
+  printDigits(second());
+  Serial.print(" ");
+  Serial.print(day());
+  Serial.print(".");
+  Serial.print(month());
+  Serial.print(".");
+  Serial.print(year());
+  Serial.println();
+}
+
+void ExternalRTCDisplay() {
+  // Start printing elements as individuals                                                                //|
+  Serial.print("Current Date / Time as per External RTC: ");  //|
+  Serial.print(myRTC.dayofmonth);         //|
+  Serial.print("/");                      //|
+  Serial.print(myRTC.month);              //|
+  Serial.print("/");                      //|
+  Serial.print(myRTC.year);               //|
+  Serial.print("  ");                     //|
+  Serial.print(myRTC.hours);              //|
+  Serial.print(":");                      //|
+  Serial.print(myRTC.minutes);            //|
+  Serial.print(":");                      //|
+  Serial.println(myRTC.seconds);          //|
+}
+
+void printDigits(int digits) {
+  // utility for digital clock display: prints preceding colon and leading 0
+  Serial.print(":");
+  if (digits < 10)
+    Serial.print('0');
+  Serial.print(digits);
+}
+
+/*-------- NTP code ----------*/
+
+const int NTP_PACKET_SIZE = 48;      // NTP time is in the first 48 bytes of message
+byte packetBuffer[NTP_PACKET_SIZE];  //buffer to hold incoming & outgoing packets
+
+time_t getNtpTime() {
+  IPAddress ntpServerIP;  // NTP server's ip address
+
+  while (Udp.parsePacket() > 0)
+    ;  // discard any previously received packets
+  Serial.println("Transmit NTP Request");
+  // get a random server from the pool
+  WiFi.hostByName(ntpServerName, ntpServerIP);
+  Serial.print(ntpServerName);
+  Serial.print(": ");
+  Serial.println(ntpServerIP);
+  sendNTPpacket(ntpServerIP);
+  uint32_t beginWait = millis();
+  while (millis() - beginWait < 1500) {
+    int size = Udp.parsePacket();
+    if (size >= NTP_PACKET_SIZE) {
+      Serial.println("Receive NTP Response");
+      Udp.read(packetBuffer, NTP_PACKET_SIZE);  // read packet into the buffer
+      unsigned long secsSince1900;
+      // convert four bytes starting at location 40 to a long integer
+      secsSince1900 = (unsigned long)packetBuffer[40] << 24;
+      secsSince1900 |= (unsigned long)packetBuffer[41] << 16;
+      secsSince1900 |= (unsigned long)packetBuffer[42] << 8;
+      secsSince1900 |= (unsigned long)packetBuffer[43];
+      return secsSince1900 - 2208988800UL + timeZone * SECS_PER_HOUR;
+    }
+  }
+  Serial.println("No NTP Response :-(");
+  return 0;  // return 0 if unable to get the time
+}
+
+// send an NTP request to the time server at the given address
+void sendNTPpacket(IPAddress &address) {
+  // set all bytes in the buffer to 0
+  memset(packetBuffer, 0, NTP_PACKET_SIZE);
+  // Initialize values needed to form NTP request
+  // (see URL above for details on the packets)
+  packetBuffer[0] = 0b11100011;  // LI, Version, Mode
+  packetBuffer[1] = 0;           // Stratum, or type of clock
+  packetBuffer[2] = 6;           // Polling Interval
+  packetBuffer[3] = 0xEC;        // Peer Clock Precision
+  // 8 bytes of zero for Root Delay & Root Dispersion
+  packetBuffer[12] = 49;
+  packetBuffer[13] = 0x4E;
+  packetBuffer[14] = 49;
+  packetBuffer[15] = 52;
+  // all NTP fields have been given values, now
+  // you can send a packet requesting a timestamp:
+  Udp.beginPacket(address, 123);  //NTP requests are to port 123
+  Udp.write(packetBuffer, NTP_PACKET_SIZE);
+  Udp.endPacket();
+}
+
+void watering_off() {
+  if (timerIsRunning == true) {
+    digitalWrite(Relay, LOW);  //Off-0
+    Blynk.logEvent("watering_off", String("Watering is turned OFF"));
+  }
+  timerIsRunning = false;
+}
