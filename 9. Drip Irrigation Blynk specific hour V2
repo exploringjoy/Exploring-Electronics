@@ -138,7 +138,7 @@ void loop() {
   if ((timerIsRunning == true || myRTC.hours == 9 || myRTC.hours == 10) && (myRTC.minutes == 0)) {
     if (timerIsRunning == false) {
       digitalWrite(Relay, HIGH);  //On-1
-      Blynk.logEvent("watering_on", String("Morning Watering is turned ON"));
+      Blynk.logEvent("watering_on", String("Morning Watering is turned ON, RTC Time: " + String(myRTC.hours) + ":" + String(myRTC.minutes) + ":" + String(myRTC.seconds) ));
     }
 
     //setting up delay for 2.5 min.
@@ -152,7 +152,7 @@ void loop() {
     if (timerIsRunning == false) {
       digitalWrite(Relay, HIGH);  //On-1
       Serial.println("Watering the plant/ON");
-      Blynk.logEvent("watering_on", String("Evening Watering is turned ON"));  //|
+      Blynk.logEvent("watering_on", String("Evening Watering is turned ON, RTC Time: " + String(myRTC.hours) + ":" + String(myRTC.minutes) + ":" + String(myRTC.seconds)));  //|
     }
     timer.setTimeout(120000L, watering_off);
     timerIsRunning = true;
@@ -202,6 +202,9 @@ void loop() {
       delay(6000);
     }
   }
+
+    // Add one second delay between iterations. The RTC reading was not showing correctly sometime so including this additional delay of 1 second between RTC updatetime.
+  delay(1000);
 }
 
 
@@ -221,7 +224,7 @@ void digitalClockDisplay() {
 
 void ExternalRTCDisplay() {
   // Start printing elements as individuals                                                                //|
-  Serial.print("Current Date / Time as per External RTC: ");  //|
+  Serial.print("Current Date & Time as per External RTC: ");  //|
   Serial.print(myRTC.dayofmonth);         //|
   Serial.print("/");                      //|
   Serial.print(myRTC.month);              //|
@@ -304,7 +307,7 @@ void sendNTPpacket(IPAddress &address) {
 void watering_off() {
   if (timerIsRunning == true) {
     digitalWrite(Relay, LOW);  //Off-0
-    Blynk.logEvent("watering_off", String("Watering is turned OFF"));
+    Blynk.logEvent("watering_off", String("Watering is turned OFF, RTC Time: " + String(myRTC.hours) + ":" + String(myRTC.minutes) + ":" + String(myRTC.seconds)));
   }
   timerIsRunning = false;
 }
