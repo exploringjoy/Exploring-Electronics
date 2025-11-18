@@ -130,12 +130,16 @@ time_t prevDisplay = 0;  // when the digital clock was displayed
 void loop() {
   Blynk.run();
   timer.run();
+    WDT.refresh();  //refresh the Watchdog timer
   // This allows for the update of variables for time or accessing the individual elements.
+
+      // Add one second delay between iterations. The RTC reading was not showing correctly sometime so including this additional delay of 1 second between RTC updatetime.
+  delay(1000);
   myRTC.updateTime();
-  WDT.refresh();  //refresh the Watchdog timer
+ delay(1000);
 
   //Morning Watering for 5 min
-  if ((timerIsRunning == true || myRTC.hours == 9 || myRTC.hours == 10) && (myRTC.minutes == 0)) {
+  if ((timerIsRunning == true || myRTC.hours == 9 || myRTC.hours == 10) && (myRTC.minutes == 5)) {
     if (timerIsRunning == false) {
       digitalWrite(Relay, HIGH);  //On-1
       Blynk.logEvent("watering_on", String("Morning Watering is turned ON, RTC Time: " + String(myRTC.hours) + ":" + String(myRTC.minutes) + ":" + String(myRTC.seconds) ));
@@ -148,7 +152,7 @@ void loop() {
 
 
   //Evening Watering for 2 min
-  if ((timerIsRunning == true || myRTC.hours == 17) && (myRTC.minutes == 0)) {
+  if ((timerIsRunning == true || myRTC.hours == 17) && (myRTC.minutes == 5)) {
     if (timerIsRunning == false) {
       digitalWrite(Relay, HIGH);  //On-1
       Serial.println("Watering the plant/ON");
@@ -180,10 +184,12 @@ void loop() {
 
       //Synchronizing the External RTC with time received from NTP once every 24 hours
       if (Blynk.connected() == true && myRTC.hours == 8 && myRTC.minutes == 0 && ExternalRTCSync==false) {
+        
         myRTC.setDS1302Time(second(), minute(), hour(), weekday(), day(), month(), year());
         Serial.println("Synchronizing the External RTC with NTP");
         delay(500);
         ExternalRTCSync=true; //Flag to Sync the Clock only once.
+        Blynk.logEvent("rtc_sync", String("External RTC is synced with NTP, RTC Time: " + String(myRTC.hours) + ":" + String(myRTC.minutes) + ":" + String(myRTC.seconds)+ (" NTP Time: ") + String(hour()) + ":" + String(minute()) + ":" + String(second()))); 
       }
     }
   }
@@ -203,8 +209,7 @@ void loop() {
     }
   }
 
-    // Add one second delay between iterations. The RTC reading was not showing correctly sometime so including this additional delay of 1 second between RTC updatetime.
-  delay(1000);
+
 }
 
 
